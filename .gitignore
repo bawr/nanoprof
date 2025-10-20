@@ -1,0 +1,24 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Compiled modules
+*.o
+*.so
+
+# Test profiles
+test/**/*.txt
+test/**/*.qnd
+
+# Virtual environments
+.venv
+
+# Visual Studio Code
+.vscode
+
+# Misc trash
+.tmp
