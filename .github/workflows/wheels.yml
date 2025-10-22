@@ -3,8 +3,6 @@ name: Build
 on:
   workflow_dispatch:
   push:
-    tags:
-      - 'v*'
 
 jobs:
   build_wheels:
@@ -40,6 +38,8 @@ jobs:
     name: 'Wheels: aggregate'
     runs-on: ubuntu-latest
     needs: build_wheels
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/download-artifact@v4
@@ -47,7 +47,7 @@ jobs:
           merge-multiple: true
           path: ./wheelhouse
 
-      - uses: actions/upload-artifact@v4
+      - uses: softprops/action-gh-release@v2
         with:
-          name: wheels
-          path: ./wheelhouse/*.whl
+          prerelease: true
+          files: ./wheelhouse/*.whl
