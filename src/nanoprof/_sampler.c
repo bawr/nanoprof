@@ -6,12 +6,16 @@
 #define MAX_STACK_DEPTH 1024
 #define COUNTER_MAX 7
 
-#pragma clang diagnostic push
-#pragma clang diagnostic error "-Wall"
-#pragma clang diagnostic error "-Wincompatible-pointer-types"
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-#pragma clang diagnostic ignored "-Wunused-function"
-#pragma clang diagnostic ignored "-Wunused-variable"
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic error "-Wall"
+#pragma GCC diagnostic error "-Wextra"
+#pragma GCC diagnostic error "-Wincompatible-pointer-types"
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#pragma GCC diagnostic ignored "-Wunused-function"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#endif
 
 #pragma endregion
 
@@ -412,7 +416,7 @@ static NodeID force_node_for_coro(SamplerThreadState *sts)
 {
     NodeID node = 0;
     FrameCopy *frame;
-    for (int i = 0; i < sts->stack_depth; i++) {
+    for (unsigned int i = 0; i < sts->stack_depth; i++) {
         frame = &sts->stack[i];
         node = frame->node = FrameNode_upsert(node, frame->code);
 //      PySet_Add(sampler_code_pending, (PyObject*) frame->code);
@@ -423,7 +427,7 @@ static NodeID force_node_for_coro(SamplerThreadState *sts)
 static void collect_sample(SamplerThreadState *sts, NTicks time_now, int is_active) {
     NodeID node = 0;
     FrameCopy *frame;
-    for (int i = 0; i < sts->stack_depth; i++) {
+    for (unsigned int i = 0; i < sts->stack_depth; i++) {
         frame = &sts->stack[i];
         // We only entree stacks up to min_period, the idea is to avoid tree churn.
         if ((frame->time < time_now) && (time_now - frame->time > min_period)) {
@@ -461,7 +465,7 @@ static void emit_samples(PyThreadState *pts, NTicks time_now) {
     PyErr_Clear();
     sampler_code_pending = updated_code_pending;
 
-    for (int i = 1; i < NEXT_FREE_NODE; i++) {
+    for (unsigned int i = 1; i < NEXT_FREE_NODE; i++) {
         if (FRAMES[i].node_caller == 0) {
             if (profile_debug || 1) {
                 FrameNode_debug(i, 0);
@@ -656,7 +660,9 @@ PyObject *sampler_evalex(PyThreadState *tstate, PyFrame frame, int throwflag)
 
 #if COROUTINES && (PY_MINOR_VERSION < 13)
     // Sneaky coroutine origin tracking
-    if ((_Py_OPCODE(*frame->prev_instr) == RETURN_GENERATOR) && (frame->prev_instr == _PyCode_CODE(frame->f_code)) && (frame->f_code->co_flags & (CO_COROUTINE | CO_ASYNC_GENERATOR))) {
+    if ((_Py_OPCODE(*frame->prev_instr) == RETURN_GENERATOR)
+    &&  (frame->prev_instr == _PyCode_CODE(frame->f_code))
+    &&  (frame->f_code->co_flags & (CO_COROUTINE | CO_ASYNC_GENERATOR)) {
         force_node_for_coro(sts);
     }
 #endif
@@ -843,6 +849,8 @@ PyMODINIT_FUNC PyInit__sampler(void) {
 	return PyModule_Create(&sampler_module);
 }
 
-#pragma clang diagnostic pop
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
 
 #pragma endregion

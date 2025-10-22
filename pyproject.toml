@@ -24,6 +24,12 @@ ext-modules = [
     { name = "nanoprof._sampler", sources = ["src/nanoprof/_sampler.c"] }
 ]
 
+[tool.setuptools.package-data]
+nanoprof = [
+    "*.c",
+    "*.h",
+]
+
 [tool.uv]
 cache-keys = [
     { file = "pyproject.toml" },

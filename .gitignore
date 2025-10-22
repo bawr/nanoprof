@@ -22,3 +22,6 @@ test/**/*.qnd
 
 # Misc trash
 .tmp
+
+# Wheels
+wheelhouse/

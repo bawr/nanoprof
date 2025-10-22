@@ -46,13 +46,15 @@ static inline void tick_init(void) {
 
 #elif __ARM_ARCH_ISA_A64
 
-static inline volatile uint64_t tick_time(void) {
+#include <arm_acle.h>
+
+static inline uint64_t tick_time(void) {
     asm volatile ("nop");
-    return __builtin_arm_rsr64("CNTVCT_EL0") * tick_to_ns_mul / tick_to_ns_div;
+    return __arm_rsr64("CNTVCT_EL0") * tick_to_ns_mul / tick_to_ns_div;
 }
 
-static inline volatile uint64_t tick_freq(void) {
-    return __builtin_arm_rsr64("CNTFRQ_EL0");
+static inline uint64_t tick_freq(void) {
+    return __arm_rsr64("CNTFRQ_EL0");
 }
 
 static inline void tick_init(void) {
