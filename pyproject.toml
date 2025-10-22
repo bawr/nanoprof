@@ -19,6 +19,9 @@ requires = [
     "setuptools>=80",
 ]
 
+[tool.cibuildwheel.linux]
+repair-wheel-command = "auditwheel repair --only-plat --wheel-dir {dest_dir} {wheel}"
+
 [tool.setuptools]
 ext-modules = [
     { name = "nanoprof._sampler", sources = ["src/nanoprof/_sampler.c"] }
