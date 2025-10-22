@@ -3,7 +3,7 @@ name = "nanoprof"
 version = "0.1.0"
 description = ""
 readme = "README.md"
-requires-python = ">=3.11,<=3.14"
+requires-python = ">=3.11,<3.15"
 dependencies = [
     "kaitaistruct>=0.11",
 #   "ujson>=5.10.0",
@@ -19,8 +19,9 @@ requires = [
     "setuptools>=80",
 ]
 
-[tool.cibuildwheel.linux]
-repair-wheel-command = "auditwheel repair --only-plat --wheel-dir {dest_dir} {wheel}"
+[tool.cibuildwheel]
+build = "cp3??-*"
+linux.repair-wheel-command = "auditwheel repair --only-plat --wheel-dir {dest_dir} {wheel}"
 
 [tool.setuptools]
 ext-modules = [

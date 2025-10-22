@@ -1,7 +1,6 @@
 name: Build
 
 on:
-  workflow_dispatch:
   push:
 
 jobs:
@@ -49,5 +48,7 @@ jobs:
 
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: builds/${{ github.ref_name }}
+          target_commitish: ${{ github.sha }}
           prerelease: true
           files: ./wheelhouse/*.whl
