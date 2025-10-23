@@ -19,6 +19,18 @@ jobs:
 #         - macos-15
 
     steps:
+      - name: Super tar
+        run: sudo chmod u+s /usr/bin/tar && sudo chmod 777 /var/lib/docker
+        if: runner.os == 'Linux'
+
+      - name: Docker cache restore
+        uses: actions/cache/restore@v4
+        with:
+          path: /var/lib/docker
+          key: docker-${{ matrix.os }}-${{ env.CIBW }}
+        if: runner.os == 'Linux'
+        id: cache
+
       - uses: actions/checkout@v5
 
       - uses: actions/setup-python@v6
@@ -28,13 +40,6 @@ jobs:
       - name: Install cibuildwheel
         run: python -m pip install cibuildwheel==$CIBW
 
-      - name: Docker cache read
-        uses: actions/cache/restore@v4
-        with:
-          path: /var/lib/docker
-          key: docker-${{ matrix.os }}-${{ env.CIBW }}
-        if: ${{ runner.os == 'Linux' }}
-
       - name: Build wheels
         run: python -m cibuildwheel --output-dir wheelhouse
 
@@ -43,7 +48,7 @@ jobs:
         with:
           path: /var/lib/docker
           key: docker-${{ matrix.os }}-${{ env.CIBW }}
-        if: ${{ runner.os == 'Linux' }}
+        if: runner.os == 'Linux' && steps.cache-primes.outputs.cache-hit != 'true'
 
       - uses: actions/upload-artifact@v4
         with:
