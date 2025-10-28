@@ -5,6 +5,7 @@ on:
 
 env:
   CIBW: '3.2.1'
+  CIBW_SKIP: 'cp314-macosx_x86_64'
 
 jobs:
   build:
@@ -32,10 +33,6 @@ jobs:
         id: cache
 
       - uses: actions/checkout@v5
-
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.14'
 
       - name: Install cibuildwheel
         run: python -m pip install cibuildwheel==$CIBW
