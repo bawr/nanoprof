@@ -19,17 +19,20 @@ jobs:
 #         - macos-15
 
     steps:
-      - name: Super tar
-        run: sudo chmod u+s /usr/bin/tar && sudo chmod 777 /var/lib/docker
-        if: runner.os == 'Linux'
+      - name: Debug
+        run: docker info; docker buildx inspect; sudo cat /etc/docker/daemon.json
 
-      - name: Docker cache restore
-        uses: actions/cache/restore@v4
-        with:
-          path: /var/lib/docker
-          key: docker-${{ matrix.os }}-${{ env.CIBW }}
-        if: runner.os == 'Linux'
-        id: cache
+#     - name: Super tar
+#       run: sudo chmod u+s /usr/bin/tar && sudo chmod 777 /var/lib/docker
+#       if: runner.os == 'Linux'
+#
+#     - name: Docker cache restore
+#       uses: actions/cache/restore@v4
+#       with:
+#         path: /var/lib/docker
+#         key: docker-${{ matrix.os }}-${{ env.CIBW }}
+#       if: runner.os == 'Linux'
+#       id: cache
 
       - uses: actions/checkout@v5
 
@@ -43,12 +46,12 @@ jobs:
       - name: Build wheels
         run: python -m cibuildwheel --output-dir wheelhouse
 
-      - name: Docker cache save
-        uses: actions/cache/save@v4
-        with:
-          path: /var/lib/docker
-          key: docker-${{ matrix.os }}-${{ env.CIBW }}
-        if: runner.os == 'Linux' && steps.cache-primes.outputs.cache-hit != 'true'
+#     - name: Docker cache save
+#       uses: actions/cache/save@v4
+#       with:
+#         path: /var/lib/docker
+#         key: docker-${{ matrix.os }}-${{ env.CIBW }}
+#       if: runner.os == 'Linux' && steps.cache-primes.outputs.cache-hit != 'true'
 
       - uses: actions/upload-artifact@v4
         with:
