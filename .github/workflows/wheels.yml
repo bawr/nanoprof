@@ -19,9 +19,6 @@ jobs:
 #         - macos-15
 
     steps:
-      - name: Debug
-        run: docker info; docker buildx inspect; sudo cat /etc/docker/daemon.json
-
 #     - name: Super tar
 #       run: sudo chmod u+s /usr/bin/tar && sudo chmod 777 /var/lib/docker
 #       if: runner.os == 'Linux'
@@ -33,6 +30,11 @@ jobs:
 #         key: docker-${{ matrix.os }}-${{ env.CIBW }}
 #       if: runner.os == 'Linux'
 #       id: cache
+
+      - name: Setup upterm session
+        uses: owenthereal/action-upterm@v1
+        with:
+          limit-access-to-actor: true 
 
       - uses: actions/checkout@v5
 
