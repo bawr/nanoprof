@@ -14,13 +14,13 @@ jobs:
       matrix:
         os:
           - ubuntu-24.04
-          - ubuntu-24.04-arm
+#         - ubuntu-24.04-arm
 #         - macos-15-intel
 #         - macos-15
 
     steps:
       - name: Super tar
-        run: sudo chmod u+s /usr/bin/tar && sudo chmod 777 /var/lib/docker && sudo systemctl stop docker
+        run: sudo chmod u+s /usr/bin/tar && sudo systemctl stop docker && sudo chmod 777 /var/lib/docker
         if: runner.os == 'Linux'
 
       - name: Docker cache restore
@@ -30,11 +30,6 @@ jobs:
           key: docker-${{ matrix.os }}-${{ env.CIBW }}
         if: runner.os == 'Linux'
         id: cache
-
-      - name: Setup upterm session
-        uses: owenthereal/action-upterm@v1
-        with:
-          limit-access-to-actor: true 
 
       - uses: actions/checkout@v5
 
@@ -49,7 +44,7 @@ jobs:
         run: python -m cibuildwheel --output-dir wheelhouse
 
       - name: Docker stop
-        run: sudo systemctl stop docker
+        run: sudo systemctl stop docker && sudo chmod 777 /var/lib/docker
         if: runner.os == 'Linux' && steps.cache.outputs.cache-hit != 'true'
 
       - name: Docker cache save
