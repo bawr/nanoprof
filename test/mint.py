@@ -6,14 +6,14 @@ import time
 import nanoprof._sampler
 
 def wait(t):
-    time.sleep(t)
+    time.sleep(t * 10)
 
 def mark(item = None):
     return item
 
 def thread(arg):
     mark(arg)
-    wait(0.1)
+    wait(0.1 * 10)
     mark(arg)
 
 def main():
