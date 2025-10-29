@@ -217,7 +217,7 @@ void write_time(TimeID time_id)
 {
     FrameTime time = TIMERS[time_id];
     write_typed(uint16_t, 0xFFFF);
-    write_typed(uint32_t, time.native_thread_id);
+    write_typed(uint64_t, time.native_thread_id);
     write_typed(uint32_t, time.node);
     write_typed(uint64_t, time.time_active);
     write_typed(uint64_t, time.time_paused);
@@ -463,6 +463,7 @@ void FrameTime_upsert(NodeID node_id, NTicks ticks, SamplerThreadState *sts, int
         time_id = NEXT_FREE_TIME++;
         TIMERS[time_id].next = FRAMES[node_id].head_thread;
         TIMERS[time_id].node = node_id;
+        TIMERS[time_id].native_thread_id = sts->native_thread_id;
         FRAMES[node_id].head_thread = time_id;
     }
     FrameTime *timer = &TIMERS[time_id];

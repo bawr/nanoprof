@@ -35,7 +35,7 @@ types:
   time:
     seq:
       - id: thread_id
-        type: u4
+        type: u8
       - id: node_id
         type: u2
       - id: time_active
