@@ -29,15 +29,15 @@ types:
     - id: ptr
       type: u8
     - id: node_id
-      type: u2
+      type: u4
     - id: caller_id
-      type: u2
+      type: u4
   time:
     seq:
       - id: thread_id
         type: u8
       - id: node_id
-        type: u2
+        type: u4
       - id: time_active
         type: u8
       - id: time_paused
