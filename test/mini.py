@@ -61,7 +61,7 @@ def main():
     walk(gen3(gen2(3)))
 
 if __name__ == "__main__":
-    q = nanoprof._sampler.inject()
+    q = nanoprof._sampler.inject(None)
     q = nanoprof._sampler.enable(True)
     main()
     r = nanoprof._sampler.finish()

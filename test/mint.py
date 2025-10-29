@@ -5,12 +5,15 @@ import time
 
 import nanoprof._sampler
 
+def wait(t):
+    time.sleep(t)
+
 def mark(item = None):
     return item
 
 def thread(arg):
     mark(arg)
-    time.sleep(0.1)
+    wait(0.1)
     mark(arg)
 
 def main():
@@ -27,18 +30,18 @@ def main():
     )
     mark(m0)
     t1.start()
-    time.sleep(0.25)
+    wait(0.25)
     t1.join()
-    time.sleep(0.25)
+    wait(0.25)
     mark(m0)
     t2.start()
-    time.sleep(0.25)
+    wait(0.25)
     t2.join()
-    time.sleep(0.25)
+    wait(0.25)
     mark(m0)
 
 if __name__ == "__main__":
-    q = nanoprof._sampler.inject()
+    q = nanoprof._sampler.inject(None)
     q = nanoprof._sampler.enable(True)
     main()
     r = nanoprof._sampler.finish()

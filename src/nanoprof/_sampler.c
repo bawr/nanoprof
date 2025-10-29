@@ -143,6 +143,7 @@ typedef struct {
     NTicks time_paused;
     NTicks time_waited;
     TimeID next;
+    NodeID node;
 } FrameTime;
 
 typedef struct SamplerThreadState SamplerThreadState;
@@ -160,6 +161,7 @@ FrameNode FRAMES[FRAMES_MAX];
 FrameTime TIMERS[TIMERS_MAX];
 
 NodeID NEXT_FREE_NODE = 1;
+NodeID LAST_SEEN_NODE = 0;
 NodeID LAST_FREE_NODE = FRAMES_MAX - 1;
 TimeID NEXT_FREE_TIME = 1;
 TimeID LAST_FREE_TIME = TIMERS_MAX - 1;
@@ -173,6 +175,73 @@ SamplerThreadState* STATE_TAIL = NULL;
 SamplerThreadState STATE_ERROR = {};
 
 #include "_sampler_util.h"
+
+#pragma region buffer
+
+#define write_typed(T, D) ({ T data = (T) (D); write_buffer(&data, sizeof(T)); })
+
+void write_buffer(const void *data, size_t size)
+{
+    memcpy(profile_buffer + profile_buffer_dirty, data, size);
+    profile_buffer_dirty += size;
+}
+
+void write_string(PyObject *pstr)
+{
+    Py_ssize_t size = 0;
+    const char *text = PyUnicode_AsUTF8AndSize(pstr, &size);
+    write_typed(uint64_t, text);
+    write_typed(uint16_t, size);
+    write_buffer(text, size);
+}
+
+void write_code(PyCode code)
+{
+    write_typed(uint16_t, 0xDEC0);
+    write_typed(uint64_t, code);
+    write_string(code->co_filename);
+    write_string(code->co_qualname);
+    write_typed(uint16_t, code->co_firstlineno);
+}
+
+void write_node(NodeID node_id)
+{
+    FrameNode node = FRAMES[node_id];
+    write_typed(uint16_t, 0xDED0);
+    write_typed(uint64_t, node.code_object);
+    write_typed(NodeID, node_id);
+    write_typed(NodeID, node.node_caller);
+}
+
+void write_time(TimeID time_id)
+{
+    FrameTime time = TIMERS[time_id];
+    write_typed(uint16_t, 0xFFFF);
+    write_typed(uint32_t, time.native_thread_id);
+    write_typed(uint32_t, time.node);
+    write_typed(uint64_t, time.time_active);
+    write_typed(uint64_t, time.time_paused);
+    write_typed(uint64_t, time.time_waited);
+}
+
+void flush_buffer(void)
+{
+    size_t count = profile_buffer_dirty;
+    const void * start = profile_buffer;
+    ssize_t ret = 0;
+    while (count) {
+        ret = write(profile_fileno, start, count);
+        if (ret >= 0) {
+            start += ret;
+            count -= ret;
+        } else {
+            break;
+        }
+    }
+    profile_buffer_dirty = 0;
+}
+
+#pragma endregion
 
 static inline uint64_t stack_depth(PyFrame frame)
 {
@@ -393,6 +462,7 @@ void FrameTime_upsert(NodeID node_id, NTicks ticks, SamplerThreadState *sts, int
     if (time_id == 0) {
         time_id = NEXT_FREE_TIME++;
         TIMERS[time_id].next = FRAMES[node_id].head_thread;
+        TIMERS[time_id].node = node_id;
         FRAMES[node_id].head_thread = time_id;
     }
     FrameTime *timer = &TIMERS[time_id];
@@ -457,24 +527,39 @@ static void emit_samples(PyThreadState *pts, NTicks time_now) {
     PyObject *code = NULL;
     while ((code = PySet_Pop(updated_code_pending))) {
         if (profile_debug) {
-            const char *name = PyUnicode_AsUTF8(((PyCode) code)->co_name);
-            printf("CODE: %p %zu %s\n", code, Py_REFCNT(code), name);
+            const char *text = PyUnicode_AsUTF8(((PyCode) code)->co_name);
+            printf("CODE: %p %zu %s\n", code, Py_REFCNT(code), text);
         }
+        write_code((PyCode) code);
         PySet_Add(sampler_code_written, code);
     }
     PyErr_Clear();
     sampler_code_pending = updated_code_pending;
 
+    // TODO: just keep an index of last written node?
     for (unsigned int i = 1; i < NEXT_FREE_NODE; i++) {
+        if (LAST_SEEN_NODE < i) {
+            LAST_SEEN_NODE = i;
+            write_node(i);
+        }
         if (FRAMES[i].node_caller == 0) {
-            if (profile_debug || 1) {
+            if (profile_debug) {
                 FrameNode_debug(i, 0);
             }
         }
     }
-    if (profile_debug || 1) {
+    if (profile_debug) {
         printf("\n");
     }
+
+/*
+    for (unsigned int i = 1; i < NEXT_FREE_TIME; i++) {
+        write_time(i);
+        FRAMES[TIMERS[i].node].head_thread = 0;
+    }
+    memset(TIMERS, 0, NEXT_FREE_TIME * sizeof(FrameTime));
+    NEXT_FREE_TIME = 1;
+*/
 
     for (SamplerThreadState *tts = STATE_HEAD; tts; tts = tts->snext) {
         NTicks t0 = tick_time();
@@ -484,6 +569,8 @@ static void emit_samples(PyThreadState *pts, NTicks time_now) {
         NTicks t1 = tick_time();
         COUNTERS[6] += t1 - t0;
     }
+
+    flush_buffer();
 
 //  PyThread_release_lock((runtime)->interpreters.mutex);
 }
@@ -590,32 +677,6 @@ static inline void periodic(PyThreadState *pts, SamplerThreadState *sts, uint64_
 #pragma endregion
 
 #pragma region sampler
-
-#define write_typed(T, D) ({ T data = (T) (D); write_buffer(&data, sizeof(T)); })
-
-void write_buffer(void *data, size_t size)
-{
-    memcpy(profile_buffer + profile_buffer_dirty, data, size);
-    profile_buffer_dirty += size;
-}
-
-void flush_buffer(void)
-{
-    size_t count = profile_buffer_dirty;
-    const void * start = profile_buffer;
-    ssize_t ret = 0;
-    while (count) {
-        ret = write(profile_fileno, start, count);
-        if (ret >= 0) {
-            start += ret;
-            count -= ret;
-        } else {
-            break;
-        }
-    }
-    profile_buffer_dirty = 0;
-}
-
 
 PyObject *sampler_evalex(PyThreadState *tstate, PyFrame frame, int throwflag)
 {
@@ -772,6 +833,8 @@ PyObject *sampler_enable(PyObject * Py_UNUSED(module), PyObject *args)
 
 PyObject *sampler_finish(PyObject * Py_UNUSED(module), PyObject * Py_UNUSED(args))
 {
+    flush_buffer();
+
     profile_start = 0;
     profile_close = tick_time();
 
