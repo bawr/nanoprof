@@ -1,0 +1,290 @@
+{
+    "meta": {
+        "interval": 0.001,
+        "startTime": 1761736543000,
+        "extensions": {
+            "id": [],
+            "name": [],
+            "baseURL": [],
+            "length": 0
+        },
+        "processType": 0,
+        "product": "",
+        "stackwalk": 1,
+        "debug": false,
+        "version": 32,
+        "categories": [
+            {
+                "name": "Python",
+                "color": "green",
+                "subcategories": [
+                    "Other",
+                    "App",
+                    "Lib"
+                ]
+            }
+        ],
+        "preprocessedProfileVersion": 58,
+        "symbolicated": true,
+        "markerSchema": [
+            {
+                "name": "Sample",
+                "display": [
+                    "marker-chart",
+                    "marker-table"
+                ],
+                "fields": [],
+                "graphs": []
+            }
+        ]
+    },
+    "libs": [
+        {
+            "name": "_py_lib",
+            "path": "/py/lib",
+            "debugName": "_py_lib",
+            "debugPath": "/py/lib",
+            "breakpadId": "000000000000000000000000000000000",
+            "codeId": "null",
+            "arch": "arm64"
+        },
+        {
+            "name": "_py_src",
+            "path": "/py/src",
+            "debugName": "_py_lib",
+            "debugPath": "/py/lib",
+            "breakpadId": "000000000000000000000000000000000",
+            "codeId": "null",
+            "arch": "arm64"
+        }
+    ],
+    "pages": [],
+    "counters": [],
+    "profilerOverhead": [],
+    "shared": {
+        "stringArray": [
+            "$",
+            "<module>",
+            "main",
+            "wait",
+            "Thread.join",
+            "/Users/bawr/Code/nanoprof/test/mint.py",
+            "/Users/bawr/.local/share/uv/python/cpython-3.11.13-macos-aarch64-none/lib/python3.11/threading.py"
+        ],
+        "sources": {
+            "length": 5,
+            "uuid": [
+                null,
+                null,
+                null,
+                null,
+                null
+            ],
+            "filename": [
+                0,
+                5,
+                5,
+                5,
+                6
+            ]
+        }
+    },
+    "threads": [
+        {
+            "name": "GeckoMain",
+            "isMainThread": true,
+            "processType": "default",
+            "processName": "Parent Process",
+            "processStartupTime": 0,
+            "processShutdownTime": null,
+            "registerTime": 0,
+            "unregisterTime": null,
+            "tid": 7442229,
+            "pid": "51580",
+            "pausedRanges": [],
+            "frameTable": {
+                "address": [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                ],
+                "inlineDepth": [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                ],
+                "category": [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                ],
+                "subcategory": [
+                    0,
+                    1,
+                    1,
+                    1,
+                    2
+                ],
+                "func": [
+                    0,
+                    1,
+                    2,
+                    3,
+                    4
+                ],
+                "nativeSymbol": [
+                    null,
+                    null,
+                    null,
+                    null,
+                    null
+                ],
+                "innerWindowID": [
+                    null,
+                    null,
+                    null,
+                    null,
+                    null
+                ],
+                "line": [
+                    null,
+                    1,
+                    19,
+                    8,
+                    1087
+                ],
+                "column": [
+                    null,
+                    null,
+                    null,
+                    null,
+                    null
+                ],
+                "length": 5
+            },
+            "funcTable": {
+                "isJS": [
+                    false,
+                    false,
+                    false,
+                    false,
+                    false
+                ],
+                "relevantForJS": [
+                    true,
+                    true,
+                    true,
+                    true,
+                    true
+                ],
+                "name": [
+                    0,
+                    1,
+                    2,
+                    3,
+                    4
+                ],
+                "resource": [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                ],
+                "source": [
+                    0,
+                    1,
+                    2,
+                    3,
+                    4
+                ],
+                "lineNumber": [
+                    null,
+                    null,
+                    null,
+                    null,
+                    null
+                ],
+                "columnNumber": [
+                    null,
+                    null,
+                    null,
+                    null,
+                    null
+                ],
+                "length": 5
+            },
+            "nativeSymbols": {
+                "libIndex": [],
+                "address": [],
+                "name": [],
+                "functionSize": [],
+                "length": 0
+            },
+            "resourceTable": {
+                "lib": [0],
+                "name": [0],
+                "host": [null],
+                "type": [1],
+                "length": 1
+            },
+            "stackTable": {
+                "frame": [
+                    0,
+                    1,
+                    2,
+                    3,
+                    4
+                ],
+                "prefix": [
+                    null,
+                    null,
+                    1,
+                    2,
+                    2
+                ],
+                "length": 5
+            },
+            "markers": {
+                "data": [],
+                "name": [],
+                "startTime": [],
+                "endTime": [],
+                "phase": [],
+                "category": [],
+                "length": 0
+            },
+            "samples": {
+                "stack": [
+                    3,
+                    3,
+                    4,
+                    4
+                ],
+                "timeDeltas": [
+                    0,
+                    25,
+                    25,
+                    25
+                ],
+                "weightType": "samples",
+                "weight": null,
+                "length": 4,
+                "eventDelay": [
+                    0,
+                    0,
+                    0,
+                    0
+                ]
+            }
+        }
+    ],
+    "profilingLog": {},
+    "profileGatheringLog": {}
+}
