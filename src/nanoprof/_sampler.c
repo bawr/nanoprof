@@ -552,14 +552,12 @@ static void emit_samples(PyThreadState *pts, NTicks time_now) {
         printf("\n");
     }
 
-/*
     for (unsigned int i = 1; i < NEXT_FREE_TIME; i++) {
         write_time(i);
         FRAMES[TIMERS[i].node].head_thread = 0;
     }
     memset(TIMERS, 0, NEXT_FREE_TIME * sizeof(FrameTime));
     NEXT_FREE_TIME = 1;
-*/
 
     for (SamplerThreadState *tts = STATE_HEAD; tts; tts = tts->snext) {
         NTicks t0 = tick_time();
