@@ -213,6 +213,12 @@ void write_node(NodeID node_id)
     write_typed(NodeID, node.node_caller);
 }
 
+void write_emit(NTicks time)
+{
+    write_typed(uint16_t, 0x1010);
+    write_typed(uint64_t, time - profile_start);
+}
+
 void write_time(TimeID time_id)
 {
     FrameTime time = TIMERS[time_id];
@@ -522,6 +528,7 @@ static int should_emit(uint64_t ticks) {
 }
 
 static void emit_samples(PyThreadState *pts, NTicks time_now) {
+    write_emit(time_now);
     // TODO: compact the tree.
     PyObject *updated_code_pending = PyNumber_InPlaceSubtract(sampler_code_pending, sampler_code_written);
     Py_DECREF(sampler_code_pending);

@@ -44,6 +44,10 @@ types:
         type: u8
       - id: time_waited
         type: u8
+  emit:
+    seq:
+      - id: time
+        type: u8
   utf8:
     seq:
     - id: ptr
@@ -65,6 +69,7 @@ types:
           0xDEC0: code
           0xDED0: node
           0xFFFF: time
+          0x1010: emit
 
 seq:
   - id: head

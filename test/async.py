@@ -61,8 +61,8 @@ def main():
     asyncio.run(main_asyncio())
 
 if __name__ == "__main__":
-    q = nanoprof._sampler.inject()
-    q = nanoprof._sampler.enable(True)
+    q = nanoprof._sampler.inject(asyncio.tasks._all_tasks)
+    q = nanoprof._sampler.enable(False)
     main()
     r = nanoprof._sampler.finish()
     for i, t in enumerate(r):
