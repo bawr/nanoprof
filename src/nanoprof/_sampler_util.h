@@ -86,7 +86,7 @@ FrameTag ASYNCIO_TAG = 0xE0;
 // PyAsyncGenASend
 // PyAsyncGenAThrow
 
-static getter _gen_getyieldfrom = NULL;
+static PyCFunction _gen_getyieldfrom = NULL;
 
 typedef enum {
     AWAITABLE_STATE_INIT,
@@ -220,10 +220,49 @@ void show_coro(PyObject *coro, int type, char* prefix)
     }
 }
 
-_PyInterpreterFrame *get_coro_frame(PyObject *coro)
-{
-    return _PyGen_GetFrame((PyGenObject *)coro);
-}
+typedef enum {
+    STATE_PENDING,
+    STATE_CANCELLED,
+    STATE_FINISHED
+} fut_state;
+
+#define FutureObj_HEAD(prefix)                                              \
+    PyObject_HEAD                                                           \
+    PyObject *prefix##_loop;                                                \
+    PyObject *prefix##_callback0;                                           \
+    PyObject *prefix##_context0;                                            \
+    PyObject *prefix##_callbacks;                                           \
+    PyObject *prefix##_exception;                                           \
+    PyObject *prefix##_exception_tb;                                        \
+    PyObject *prefix##_result;                                              \
+    PyObject *prefix##_source_tb;                                           \
+    PyObject *prefix##_cancel_msg;                                          \
+    fut_state prefix##_state;                                               \
+    int prefix##_log_tb;                                                    \
+    int prefix##_blocking;                                                  \
+    PyObject *dict;                                                         \
+    PyObject *prefix##_weakreflist;                                         \
+    PyObject *prefix##_cancelled_exc;
+
+typedef struct {
+    FutureObj_HEAD(task)
+    PyObject *task_fut_waiter;
+    PyObject *task_coro;
+    PyObject *task_name;
+    PyObject *task_context;
+    int task_must_cancel;
+    int task_log_destroy_pending;
+    int task_num_cancels_requested;
+} TaskObj;
+
+typedef struct {
+    FutureObj_HEAD(fut)
+} FutureObj;
+
+typedef struct {
+    PyObject_HEAD
+    FutureObj *future;
+} futureiterobject;
 
 void show_coro_stack(PyObject *coro, FrameCopyAsync **stacks)
 {
@@ -241,11 +280,11 @@ void show_coro_stack(PyObject *coro, FrameCopyAsync **stacks)
         // show_coro(next, c1, "AIC");
         }
         if (c1) {
-            __auto_type frame = get_coro_frame(next);
+            __auto_type frame = _PyGen_GetFrame((PyGenObject *)next);
             stack->func = next;
             stack->code = _PyFrame_GetCode(frame);
             stack++;
-            add_frame_tag(frame, &ASYNCIO_TAG);
+//          add_frame_tag(frame, &ASYNCIO_TAG);
             if (profile_debug) {
                 show_frame(frame, "AIO");
             }
@@ -261,6 +300,9 @@ void show_coro_stack(PyObject *coro, FrameCopyAsync **stacks)
             // 1. A Python object with a custom __await__ method. (No stack frame.)
             // 2. Something in C with a .tp_as_async slot filled. (No code object.)
             //    In asyncio, usually this would be a FutureIter.
+            printf("%p %p %s\n", next, ((futureiterobject*) next)->future, next->ob_type->tp_name);
+            // context from thread state?
+//          __builtin_trap();
             break;
         }
     }

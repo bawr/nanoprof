@@ -34,6 +34,7 @@
 #include <opcode.h>
 
 #define Py_BUILD_CORE
+#include <internal/pycore_context.h>
 #include <internal/pycore_frame.h>
 #if PY_MINOR_VERSION >= 13
 #include <internal/pycore_ceval.h>
@@ -101,7 +102,7 @@ size_t profile_buffer_limit = 16 * 1024 * 1024;
 
 #pragma region stacker
 
-#define COROUTINES 0
+#define COROUTINES 1
 
 #define STACKS_MAX 1024
 #define FRAMES_MAX 1024 * 1024
@@ -583,13 +584,15 @@ static void emit_samples(PyThreadState *pts, NTicks time_now) {
 
 PyObject *sampler_atasks(PyObject *self, PyObject *args)
 {
+    profile_debug = 1;
     EvalState estate;
     EvalState_save(&estate);
 
     Py_ssize_t pos = 0;
-    PyObject *wref;
-    Py_hash_t hash;
+    PyObject *wref = NULL;
+    Py_hash_t hash = 0;
 
+    PySetObject *asyncio_tasks_set = (PySetObject*) asyncio_tasks;
     FrameCopyAsync *stacks = TEMP_ASYNC_FRAMES;
 
     // We're using raw set functions, because we don't want to get back to EvalFrameEx.
@@ -597,6 +600,8 @@ PyObject *sampler_atasks(PyObject *self, PyObject *args)
         PyObject *task = PyWeakref_GET_OBJECT(wref);
         PyObject *coro = PyObject_GetAttrString(task, "_coro"); // TODO: hoist this up?
         PyErr_Clear();
+        PyObject *name = ((TaskObj*) task)->task_name;
+        printf("%s\n", PyUnicode_AsUTF8(name));
         if (coro != NULL) {
             show_coro_stack(coro, &stacks);
             if (profile_debug) {
@@ -610,6 +615,7 @@ PyObject *sampler_atasks(PyObject *self, PyObject *args)
     }
     stacks->code = NULL;
     EvalState_load(&estate);
+    profile_debug = 0;
     Py_RETURN_NONE;
 }
 
@@ -729,7 +735,7 @@ PyObject *sampler_evalex(PyThreadState *tstate, PyFrame frame, int throwflag)
     // Sneaky coroutine origin tracking
     if ((_Py_OPCODE(*frame->prev_instr) == RETURN_GENERATOR)
     &&  (frame->prev_instr == _PyCode_CODE(frame->f_code))
-    &&  (frame->f_code->co_flags & (CO_COROUTINE | CO_ASYNC_GENERATOR)) {
+    &&  (frame->f_code->co_flags & (CO_COROUTINE | CO_ASYNC_GENERATOR))) {
         force_node_for_coro(sts);
     }
 #endif
@@ -754,6 +760,7 @@ PyObject *sampler_evalex(PyThreadState *tstate, PyFrame frame, int throwflag)
 }
 
 destructor orig_code_dealloc = NULL;
+PyCFunction orig_set_result = NULL;
 
 void hack_code_dealloc(PyObject *code_raw)
 {
@@ -857,11 +864,25 @@ PyObject *sampler_finish(PyObject * Py_UNUSED(module), PyObject * Py_UNUSED(args
 	return r;
 }
 
+PyObject *sampler_cstack(PyObject * Py_UNUSED(module), PyObject * Py_UNUSED(args))
+{
+    PyThreadState *tstate = PyThreadState_GET();
+    PyObject *list = PyList_New(0);
+    PyObject *ctx = tstate->context;
+    while (ctx) {
+        PyList_Append(list, ctx);
+        ctx = (PyObject*) ((PyContext*) ctx)->ctx_prev;
+    }
+    PyList_Reverse(list);
+    return list;
+}
+
 PyMethodDef sampler_funcs[] = {
     { "inject", sampler_inject, METH_VARARGS, NULL, },
 	{ "enable", sampler_enable, METH_VARARGS, NULL, },
 	{ "finish", sampler_finish, METH_NOARGS,  NULL, },
 	{ "atasks", sampler_atasks, METH_NOARGS,  NULL, },
+	{ "cstack", sampler_cstack, METH_NOARGS,  NULL, },
     {},
 };
 
@@ -887,6 +908,15 @@ void sampler_atfork(void) {
     profile_fileno = 0;
 }
 
+static PyObject* _asyncio_Future_set_result_override(PyObject *self, PyObject *result) {
+    PyThreadState *tstate = PyThreadState_GET();
+    printf("%lu %p %s\n", tstate->native_thread_id, self, result->ob_type->tp_name);
+    PyFrame frame = _PyThreadState_CurrentFrame(tstate);
+    show_stack(frame, "AFR");
+    printf("\n");
+    return orig_set_result(self, result);
+}
+
 PyMODINIT_FUNC PyInit__sampler(void) {
     sampler_code_pending = PySet_New(NULL);
     sampler_code_written = PySet_New(NULL);
@@ -905,10 +935,21 @@ PyMODINIT_FUNC PyInit__sampler(void) {
     PyGetSetDef* getset = PyGen_Type.tp_getset;
     while (getset && getset->name) {
         if (strcmp(getset->name, "gi_yieldfrom") == 0) {
-            _gen_getyieldfrom = getset->get;
+            _gen_getyieldfrom = (PyCFunction) getset->get;
             break;
         }
         getset++;
+    }
+
+    PyTypeObject* asyncio_future_type = (PyTypeObject*) PyObject_GetAttrString(PyImport_ImportModule("_asyncio"), "Future");
+    PyMethodDef* method = asyncio_future_type->tp_methods;
+    while (method && method->ml_name) {
+        if (strcmp(method->ml_name, "set_result") == 0) {
+            orig_set_result = method->ml_meth;
+            method->ml_meth = _asyncio_Future_set_result_override;
+            break;
+        }
+        method++;
     }
 
 #if SUPER_UNSAFE
