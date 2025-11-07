@@ -1,30 +1,4 @@
-#define PY_VERSION_RANGE(A, B, C) ((A == PY_MAJOR_VERSION) && (B <= PY_MINOR_VERSION) && (PY_MINOR_VERSION <= C))
-#define PY_VERSION_EXACT(A, B)    ((A == PY_MAJOR_VERSION) && (B == PY_MINOR_VERSION))
-
-#if PY_VERSION_RANGE(3, 11, 12)
-static inline PyCodeObject *
-_PyFrame_GetCode(_PyInterpreterFrame *f)
-{
-    return f->f_code;
-}
-static inline _PyInterpreterFrame *
-_PyThreadState_CurrentFrame(PyThreadState *tstate)
-{
-    return tstate->cframe->current_frame;
-}
-#endif
-#if PY_VERSION_RANGE(3, 13, 14)
-static inline _PyInterpreterFrame *
-_PyThreadState_CurrentFrame(PyThreadState *tstate)
-{
-    return tstate->current_frame;
-}
-static inline int
-_Py_IsFinalizing(void)
-{
-    return Py_IsFinalizing();
-}
-#endif
+#include "_sampler.h"
 
 #if PY_VERSION_RANGE(3, 11, 13)
 static inline _PyInterpreterFrame *
@@ -86,8 +60,6 @@ FrameTag ASYNCIO_TAG = 0xE0;
 // PyAsyncGenASend
 // PyAsyncGenAThrow
 
-static PyCFunction _gen_getyieldfrom = NULL;
-
 typedef enum {
     AWAITABLE_STATE_INIT,
     AWAITABLE_STATE_ITER,
@@ -101,36 +73,10 @@ typedef struct {
     AwaitableState agx_state;
 } PyAsyncGenASendOrThrow;
 
-
-typedef struct EvalState {
-    PyObject *exc_type;
-    PyObject *exc_value;
-    PyObject *exc_trace;
-    int gc_enabled;
-    unsigned long switch_interval;
-} EvalState;
-
-void EvalState_save(EvalState *estate)
-{
-    PyErr_Fetch(&estate->exc_type, &estate->exc_value, &estate->exc_trace);
-    estate->gc_enabled = PyGC_Disable();
-    estate->switch_interval = _PyEval_GetSwitchInterval();
-    _PyEval_SetSwitchInterval(10e6);
-}
-
-void EvalState_load(EvalState *estate)
-{
-    PyErr_Restore(estate->exc_type, estate->exc_value, estate->exc_trace);
-    if (estate->gc_enabled) {
-        PyGC_Enable();
-    }
-    _PyEval_SetSwitchInterval(estate->switch_interval);
-}
-
 static inline FrameTag set_frame_tag(_PyInterpreterFrame *frame, FrameTag tag)
 {
     if (frame) {
-        FrameTag *ptr = (void*) frame + PYFRAME_SPACE_OFFSET;
+        FrameTag *ptr = (FrameTag*) ((void*) frame + PYFRAME_SPACE_OFFSET);
         FrameTag prev = *ptr;
         *ptr = tag;
         return prev;
@@ -142,7 +88,7 @@ static inline FrameTag set_frame_tag(_PyInterpreterFrame *frame, FrameTag tag)
 static inline FrameTag get_frame_tag(_PyInterpreterFrame *frame)
 {
     if (frame) {
-        FrameTag *ptr = (void*) frame + PYFRAME_SPACE_OFFSET;
+        FrameTag *ptr = (FrameTag*) ((void*) frame + PYFRAME_SPACE_OFFSET);
         return *ptr;
     } else {
         return -1;
@@ -264,6 +210,13 @@ typedef struct {
     FutureObj *future;
 } futureiterobject;
 
+
+void EvalState_save(EvalState *estate);
+void EvalState_load(EvalState *estate);
+
+NodeID FrameNode_upsert(NodeID node_caller, PyCode code_callee);
+void FrameTime_upsert(NodeID node_id, NTicks ticks, SamplerThreadState *sts, int is_active);
+
 void show_coro_stack(PyObject *coro, FrameCopyAsync **stacks)
 {
     FrameCopyAsync *stack = *stacks;
@@ -280,7 +233,7 @@ void show_coro_stack(PyObject *coro, FrameCopyAsync **stacks)
         // show_coro(next, c1, "AIC");
         }
         if (c1) {
-            __auto_type frame = _PyGen_GetFrame((PyGenObject *)next);
+            _PyInterpreterFrame* frame = _PyGen_GetFrame((PyGenObject *)next);
             stack->func = next;
             stack->code = _PyFrame_GetCode(frame);
             stack++;
@@ -288,7 +241,7 @@ void show_coro_stack(PyObject *coro, FrameCopyAsync **stacks)
             if (profile_debug) {
                 show_frame(frame, "AIO");
             }
-            next = _gen_getyieldfrom(next, NULL);
+            next = _PyGen_yf_or_none(next, NULL);
         } else if (Py_IsNone(next)) {
             break;
         } else if (Py_IS_TYPE(next, &_PyAsyncGenASend_Type)) {
@@ -309,4 +262,63 @@ void show_coro_stack(PyObject *coro, FrameCopyAsync **stacks)
     stack->code = async_frame_separator;
     stack++;
     *stacks = stack;
+}
+
+
+PyObject *sampler_atasks(PyObject *self, PyObject *args)
+{
+    profile_debug = 1;
+    EvalState estate;
+    EvalState_save(&estate);
+
+    Py_ssize_t pos = 0;
+    PyObject *wref = NULL;
+    Py_hash_t hash = 0;
+
+    PySetObject *asyncio_tasks_set = (PySetObject*) asyncio_tasks;
+    FrameCopyAsync *stacks = TEMP_ASYNC_FRAMES;
+
+    // We're using raw set functions, because we don't want to get back to EvalFrameEx.
+    while (_PySet_NextEntry(asyncio_tasks, &pos, &wref, &hash)) {
+        PyObject *task = PyWeakref_GET_OBJECT(wref);
+        PyObject *coro = PyObject_GetAttrString(task, "_coro"); // TODO: hoist this up?
+        PyErr_Clear();
+        PyObject *name = ((TaskObj*) task)->task_name;
+        printf("%s\n", PyUnicode_AsUTF8(name));
+        if (coro != NULL) {
+            show_coro_stack(coro, &stacks);
+            if (profile_debug) {
+                printf("\n");
+            }
+        }
+        Py_XDECREF(coro);
+    }
+    if (profile_debug) {
+        printf("\n");
+    }
+    stacks->code = NULL;
+    EvalState_load(&estate);
+    profile_debug = 0;
+    Py_RETURN_NONE;
+}
+
+
+static void collect_atasks(SamplerThreadState *sts, NTicks time_now)
+{
+    sampler_atasks(NULL, NULL);
+    FrameCopyAsync *frame = TEMP_ASYNC_FRAMES;
+
+    NodeID node = 0;
+
+    while (frame->code) {
+        if (frame->code != async_frame_separator) {
+            node = FrameNode_upsert(node, frame->code);
+        } else {
+            if (node) {
+                FrameTime_upsert(node, time_now - profile_eprev, sts, -1);
+            }
+            node = 0;
+        }
+        frame++;
+    }
 }
