@@ -62,6 +62,7 @@ jobs:
     needs: build
     permissions:
       contents: write
+    if: startsWith(github.ref_name, 'v')
 
     steps:
       - uses: actions/download-artifact@v4
@@ -71,7 +72,6 @@ jobs:
 
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: builds/${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
           target_commitish: ${{ github.sha }}
-          prerelease: true
           files: ./wheelhouse/*.whl
