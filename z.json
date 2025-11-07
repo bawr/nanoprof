@@ -1,12 +1,17 @@
 {
     "meta": {
-        "interval": 0.001,
+        "interval": 1,
         "startTime": 1761736543000,
         "extensions": {
             "id": [],
             "name": [],
             "baseURL": [],
             "length": 0
+        },
+        "sampleUnits": {
+            "time": "ms",
+            "eventDelay": "ms",
+            "threadCPUDelta": "ns"
         },
         "processType": 0,
         "product": "",
@@ -15,12 +20,24 @@
         "version": 32,
         "categories": [
             {
-                "name": "Python",
+                "name": "Idle",
+                "color": "transparent",
+                "subcategories": [
+                    "Other"
+                ]
+            },
+            {
+                "name": "Python:App",
                 "color": "green",
                 "subcategories": [
-                    "Other",
-                    "App",
-                    "Lib"
+                    "Other"
+                ]
+            },
+            {
+                "name": "Python:Lib",
+                "color": "blue",
+                "subcategories": [
+                    "Other"
                 ]
             }
         ],
@@ -73,13 +90,7 @@
         ],
         "sources": {
             "length": 5,
-            "uuid": [
-                null,
-                null,
-                null,
-                null,
-                null
-            ],
+            "uuid": [],
             "filename": [
                 0,
                 5,
@@ -91,7 +102,7 @@
     },
     "threads": [
         {
-            "name": "GeckoMain",
+            "name": "MainThread",
             "isMainThread": true,
             "processType": "default",
             "processName": "Parent Process",
@@ -110,26 +121,20 @@
                     0,
                     0
                 ],
-                "inlineDepth": [
-                    0,
-                    0,
-                    0,
-                    0,
-                    0
-                ],
+                "inlineDepth": [],
                 "category": [
-                    0,
-                    0,
-                    0,
-                    0,
-                    0
-                ],
-                "subcategory": [
                     0,
                     1,
                     1,
                     1,
                     2
+                ],
+                "subcategory": [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
                 ],
                 "func": [
                     0,
@@ -138,20 +143,8 @@
                     3,
                     4
                 ],
-                "nativeSymbol": [
-                    null,
-                    null,
-                    null,
-                    null,
-                    null
-                ],
-                "innerWindowID": [
-                    null,
-                    null,
-                    null,
-                    null,
-                    null
-                ],
+                "nativeSymbol": [],
+                "innerWindowID": [],
                 "line": [
                     null,
                     1,
@@ -159,22 +152,16 @@
                     8,
                     1087
                 ],
-                "column": [
-                    null,
-                    null,
-                    null,
-                    null,
-                    null
-                ],
+                "column": [],
                 "length": 5
             },
             "funcTable": {
                 "isJS": [
-                    false,
-                    false,
-                    false,
-                    false,
-                    false
+                    0,
+                    1,
+                    1,
+                    1,
+                    1
                 ],
                 "relevantForJS": [
                     true,
@@ -206,18 +193,12 @@
                 ],
                 "lineNumber": [
                     null,
-                    null,
-                    null,
-                    null,
-                    null
+                    1,
+                    19,
+                    8,
+                    1087
                 ],
-                "columnNumber": [
-                    null,
-                    null,
-                    null,
-                    null,
-                    null
-                ],
+                "columnNumber": [],
                 "length": 5
             },
             "nativeSymbols": {
@@ -230,7 +211,6 @@
             "resourceTable": {
                 "lib": [0],
                 "name": [0],
-                "host": [null],
                 "type": [1],
                 "length": 1
             },
@@ -262,26 +242,39 @@
             },
             "samples": {
                 "stack": [
-                    3,
+                    0,
+                    1,
+                    2,
                     3,
                     4,
-                    4
-                ],
-                "timeDeltas": [
-                    0,
-                    25,
-                    25,
-                    25
-                ],
-                "weightType": "samples",
-                "weight": null,
-                "length": 4,
-                "eventDelay": [
-                    0,
-                    0,
-                    0,
                     0
-                ]
+                ],
+                "time": [
+                    0,
+                    1000,
+                    2000,
+                    3000,
+                    4000,
+                    5000
+                ],
+                "weightType": "tracing-ms",
+                "weight": [
+                    500,
+                    1000,
+                    1000,
+                    1000,
+                    1000,
+                    500                    
+                ],
+                "threadCPUDelta": [
+                    0,
+                    250000000,
+                    750000000,
+                    500000000,
+                    250000000,
+                    500000000
+                ],
+                "length": 6
             }
         }
     ],
