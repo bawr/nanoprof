@@ -48,6 +48,16 @@ types:
     seq:
       - id: time
         type: u8
+  pthr:
+    seq:
+      - id: thread_id
+        type: u8
+      - id: active
+        type: u8
+      - id: time_user
+        type: u8
+      - id: time_sys
+        type: u8
   utf8:
     seq:
     - id: ptr
@@ -70,6 +80,7 @@ types:
           0xDED0: node
           0xFFFF: time
           0x1010: emit
+          0x2222: pthr
 
 seq:
   - id: head

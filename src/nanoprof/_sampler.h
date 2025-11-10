@@ -71,7 +71,6 @@ static PyCFunction _PyGen_yf_or_none = NULL;
 
 #pragma region defines
 
-#define MAX_STACK_DEPTH 1024
 #define COUNTER_MAX 7
 
 #define COROUTINES 0
@@ -83,10 +82,6 @@ static PyCFunction _PyGen_yf_or_none = NULL;
 #pragma endregion
 
 #pragma region globals
-
-static uint64_t DEPTH = 0;
-static Py_ssize_t SIZE[MAX_STACK_DEPTH];
-static const char* STACK[MAX_STACK_DEPTH];
 
 static uint64_t COUNTERS[COUNTER_MAX];
 
@@ -100,12 +95,9 @@ uint64_t profile_tprev = 0;
 uint64_t profile_eprev = 0;
 uint64_t profile_close = 0;
 
-uint64_t min_period = 1e6;
-uint64_t rec_period = 1e6;
-uint64_t agg_period = 1e9;
-
-uint64_t write_every_ns = 1e7;
-uint64_t flush_every_ns = 1e9;
+uint64_t buffer_period_ns = 1e9;
+uint64_t sample_period_ns = 1e6;
+uint64_t stack_minimum_ns = 1e6;
 
 PyObject* sentinel = NULL;
 
@@ -162,9 +154,12 @@ typedef struct {
 typedef struct SamplerThreadState SamplerThreadState;
 
 typedef struct SamplerThreadState {
+    pthread_t pthread_id;
     uint64_t native_thread_id;
     uint64_t active;
     uint64_t stack_depth;
+    uint64_t time_user;
+    uint64_t time_sys;
     SamplerThreadState *sprev;
     SamplerThreadState *snext;
     FrameCopy stack[STACKS_MAX];

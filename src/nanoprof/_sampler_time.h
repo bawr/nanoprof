@@ -23,7 +23,10 @@ gcd(uint64_t a, uint64_t b)
 }
 
 
-#ifdef __linux__
+#ifdef __APPLE__
+#define CLOCK_HARDWARE CLOCK_UPTIME_RAW
+#else
+#define CLOCK_HARDWARE CLOCK_MONOTONIC_RAW
 
 static uint64_t
 clock_gettime_nsec_np(clockid_t clock_id)
@@ -33,9 +36,6 @@ clock_gettime_nsec_np(clockid_t clock_id)
     return (uint64_t) 1e9 * ts.tv_sec + ts.tv_nsec;
 }
 
-#define CLOCK_HARDWARE CLOCK_MONOTONIC_RAW
-#else
-#define CLOCK_HARDWARE CLOCK_UPTIME_RAW
 #endif
 
 #ifdef __x86_64__

@@ -3,7 +3,7 @@
 import json
 import qnd
 
-FILE = qnd.Qnd.from_file("./test/profile.qnd")
+FILE = qnd.Qnd.from_file("./profile.qnd")
 
 NODE_TO_PREV_IDX = {}
 NODE_TO_CODE_IDX = {

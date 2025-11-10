@@ -6,44 +6,40 @@ import time
 import nanoprof._sampler
 
 def wait(t):
-    time.sleep(t * 10)
+    time.sleep(t)
+
+def spin(n):
+    s = 0
+    for i in range(n):
+        s += mark(i)
 
 def mark(item = None):
     return item
 
-def thread(arg):
-    mark(arg)
-    wait(0.1 * 10)
-    mark(arg)
+def thread(t, n):
+    wait(t)
+    spin(n)
 
 def main():
-    m0 = mark(object())
-    m1 = mark(object())
-    m2 = mark(object())
-    t1 = threading.Thread(
-        target = thread,
-        args = (m1,)
-    )
-    t2 = threading.Thread(
-        target = thread,
-        args = (m2,)
-    )
-    mark(m0)
-    t1.start()
-    wait(0.25)
-    t1.join()
-    wait(0.25)
-    mark(m0)
-    t2.start()
-    wait(0.25)
-    t2.join()
-    wait(0.25)
-    mark(m0)
+    for i in range(2):
+        threads = [
+            threading.Thread(target = thread, args = (0.25, 75_000_000)),
+            threading.Thread(target = thread, args = (0.50, 50_000_000)),
+            threading.Thread(target = thread, args = (0.75, 25_000_000)),
+            threading.Thread(target = thread, args = (1.00,          0)),
+        ]
+        for t in threads:
+            t.start()
+        wait(0.25)
+        for t in threads:
+            t.join()
 
 if __name__ == "__main__":
     q = nanoprof._sampler.inject(None)
-    q = nanoprof._sampler.enable(True)
+    q = nanoprof._sampler.enable(
+        False,
+        1e-3,
+        1e-4,
+    )
     main()
     r = nanoprof._sampler.finish()
-    for i, t in enumerate(r):
-        print(f"{i} {t:-16_}")

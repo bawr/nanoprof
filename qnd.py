@@ -104,6 +104,24 @@ class Qnd(KaitaiStruct):
             pass
 
 
+    class Pthr(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Qnd.Pthr, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._read()
+
+        def _read(self):
+            self.thread_id = self._io.read_u8le()
+            self.active = self._io.read_u8le()
+            self.time_user = self._io.read_u8le()
+            self.time_sys = self._io.read_u8le()
+
+
+        def _fetch_instances(self):
+            pass
+
+
     class Rec(KaitaiStruct):
         def __init__(self, _io, _parent=None, _root=None):
             super(Qnd.Rec, self).__init__(_io)
@@ -126,6 +144,9 @@ class Qnd(KaitaiStruct):
             elif _on == 65535:
                 pass
                 self.rec = Qnd.Time(self._io, self, self._root)
+            elif _on == 8738:
+                pass
+                self.rec = Qnd.Pthr(self._io, self, self._root)
 
 
         def _fetch_instances(self):
@@ -141,6 +162,9 @@ class Qnd(KaitaiStruct):
                 pass
                 self.rec._fetch_instances()
             elif _on == 65535:
+                pass
+                self.rec._fetch_instances()
+            elif _on == 8738:
                 pass
                 self.rec._fetch_instances()
 

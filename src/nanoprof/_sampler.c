@@ -166,6 +166,7 @@ SamplerThreadState *SamplerThreadState_alloc(PyThreadState *tstate, PyFrame fram
     if (PyThread_tss_set(&THREAD_KEY, state) != 0) {
         goto fail;
     }
+/*
     if ((tdict = _PyThreadState_GetDict(tstate)) == NULL) {
         goto fail;
     }
@@ -175,6 +176,7 @@ SamplerThreadState *SamplerThreadState_alloc(PyThreadState *tstate, PyFrame fram
     if (PyDict_SetItem(tdict, sentinel, plong) != 0) {
         goto fail;
     }
+*/
     if (STATE_HEAD == NULL) {
         STATE_HEAD = state;
         STATE_TAIL = state;
@@ -184,6 +186,7 @@ SamplerThreadState *SamplerThreadState_alloc(PyThreadState *tstate, PyFrame fram
         STATE_TAIL = state;
     }
     state->active = 1;
+    state->pthread_id = (pthread_t) tstate->thread_id;
     state->native_thread_id = tstate->native_thread_id;
     state->stack_depth = 0;
     state->sprev = state->sprev;
@@ -236,6 +239,27 @@ SamplerThreadState *SamplerThreadState_free(SamplerThreadState* state)
     PyMem_Free(state);
     return NULL;
 }
+
+#ifdef __APPLE__
+#include <libproc.h>
+
+void SamplerThreadState_times(SamplerThreadState *sts)
+{
+    struct proc_threadinfo pth = {};
+    if (proc_pidinfo(getpid(), PROC_PIDTHREADID64INFO, sts->native_thread_id, &pth, PROC_PIDTHREADINFO_SIZE)) {
+        sts->time_user = pth.pth_user_time;
+        sts->time_sys = pth.pth_system_time;
+    }
+}
+#else
+void SamplerThreadState_times(SamplerThreadState *sts)
+{
+    clockid_t tclk;
+    if (pthread_getcpuclockid(sts->pthread_id, &tclk)) {
+        sts->time_user = clock_gettime_nsec_np(tclk);
+    }
+}
+#endif
 
 PyObject *sampler_code_pending = NULL;
 PyObject *sampler_code_written = NULL;
@@ -340,7 +364,7 @@ void FrameTime_upsert(NodeID node_id, NTicks ticks, SamplerThreadState *sts, int
 
 
 static int should_sample(uint64_t ticks) {
-    return ticks > profile_tprev + rec_period;
+    return ticks > profile_tprev + sample_period_ns;
 }
 
 static NodeID force_node_for_coro(SamplerThreadState *sts)
@@ -361,7 +385,7 @@ static void collect_sample(SamplerThreadState *sts, NTicks time_now, int is_acti
     for (unsigned int i = 0; i < sts->stack_depth; i++) {
         frame = &sts->stack[i];
         // We only entree stacks up to min_period, the idea is to avoid tree churn.
-        if ((frame->time < time_now) && (time_now - frame->time > min_period)) {
+        if ((frame->time < time_now) && (time_now - frame->time > stack_minimum_ns)) {
             if (frame->node) {
                 node = frame->node;
             } else {
@@ -378,7 +402,15 @@ static void collect_sample(SamplerThreadState *sts, NTicks time_now, int is_acti
 }
 
 static int should_emit(uint64_t ticks) {
-    return ticks > profile_eprev + agg_period;
+    return ticks > profile_eprev + buffer_period_ns;
+}
+
+static void emit_thread(SamplerThreadState *sts) {
+    write_typed(uint16_t, 0x2222);
+    write_typed(uint64_t, sts->native_thread_id);
+    write_typed(uint64_t, sts->active);
+    write_typed(uint64_t, sts->time_user);
+    write_typed(uint64_t, sts->time_sys);
 }
 
 static void emit_samples(PyThreadState *pts, NTicks time_now) {
@@ -388,10 +420,6 @@ static void emit_samples(PyThreadState *pts, NTicks time_now) {
     Py_DECREF(sampler_code_pending);
     PyObject *code = NULL;
     while ((code = PySet_Pop(updated_code_pending))) {
-        if (profile_debug) {
-            const char *text = PyUnicode_AsUTF8(((PyCode) code)->co_name);
-            printf("CODE: %p %zu %s\n", code, Py_REFCNT(code), text);
-        }
         write_code((PyCode) code);
         PySet_Add(sampler_code_written, code);
     }
@@ -404,14 +432,6 @@ static void emit_samples(PyThreadState *pts, NTicks time_now) {
             LAST_SEEN_NODE = i;
             write_node(i);
         }
-        if (FRAMES[i].node_caller == 0) {
-            if (profile_debug) {
-                FrameNode_debug(i, 0);
-            }
-        }
-    }
-    if (profile_debug) {
-        printf("\n");
     }
 
     for (unsigned int i = 1; i < NEXT_FREE_TIME; i++) {
@@ -450,23 +470,20 @@ static inline void periodic(PyThreadState *pts, SamplerThreadState *sts, uint64_
 #if COROUTINES
         collect_atasks(sts, ticks);
 #endif
-        emit_samples(pts, ticks);
         for (SamplerThreadState *tts = STATE_HEAD; tts; tts = tts->snext) {
             tts->active = 0;
-        }
-        for (PyThreadState *qts = PyInterpreterState_ThreadHead(pts->interp); qts; qts = PyThreadState_Next(qts)) {
-            PyObject *tdict = _PyThreadState_GetDict(qts);
-            if (tdict == NULL) {
-                continue;
+            for (PyThreadState *qts = PyInterpreterState_ThreadHead(pts->interp); qts; qts = PyThreadState_Next(qts)) {
+                if (tts->native_thread_id == qts->native_thread_id) {
+                    tts->active = 1;
+                    SamplerThreadState_times(tts);
+                    break;
+                }
             }
-            PyObject *plong = PyDict_GetItem(tdict, sentinel);
-            if (plong == NULL) {
-                PyErr_Clear();
-                continue;
-            }
-            SamplerThreadState *tts = (SamplerThreadState*) PyLong_AsVoidPtr(plong);
-            tts->active = 1;
+            emit_thread(tts);
         }
+
+        emit_samples(pts, ticks);
+
         for (SamplerThreadState *ttn, *tts = STATE_HEAD; tts; tts = ttn) {
             ttn = tts->snext;
             if (tts->active == 0) {
@@ -633,9 +650,13 @@ PyObject *sampler_inject(PyObject * module, PyObject *args)
 
 PyObject *sampler_enable(PyObject * Py_UNUSED(module), PyObject *args)
 {
-    if (!PyArg_ParseTuple(args, "p", &profile_debug)) {
+    double arg1 = sample_period_ns / 1e9;
+    double arg2 = stack_minimum_ns / 1e9;
+    if (!PyArg_ParseTuple(args, "p|dd", &profile_debug, &arg1, &arg2)) {
         return NULL;
     }
+    stack_minimum_ns = arg1 * 1e9;
+    sample_period_ns = arg2 * 1e9;
     profile_start = tick_time();
     profile_tprev = profile_start;
     profile_eprev = profile_start;
