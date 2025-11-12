@@ -195,8 +195,7 @@ typedef struct EvalState {
 #pragma endregion
 
 #pragma region khash
-static inline khint_t kh_hash_ptr(void *ptr) { return kh_hash_uint64((uint64_t) ptr); }
-KHASHL_MAP_INIT(KH_LOCAL, pmap_t, pmap, void*, uint64_t, kh_hash_ptr, kh_eq_generic)
+KHASHL_MAP_INIT(KH_LOCAL, pmap_t, pmap, uint64_t, uint64_t, kh_hash_uint64, kh_eq_generic)
 
 pmap_t* written_code = NULL;
 pmap_t* written_text = NULL;

@@ -18,10 +18,10 @@ types:
     seq:
     - id: ptr
       type: u8
-    - id: filename
-      type: utf8
-    - id: qualname
-      type: utf8
+    - id: ptr_filename
+      type: u8
+    - id: ptr_qualname
+      type: u8
     - id: line
       type: u2
   node:
@@ -44,7 +44,7 @@ types:
         type: u8
       - id: time_waited
         type: u8
-  emit:
+  mark:
     seq:
       - id: time
         type: u8
@@ -79,8 +79,9 @@ types:
           0xDEC0: code
           0xDED0: node
           0xFFFF: time
-          0x1010: emit
+          0x1010: mark
           0x2222: pthr
+          0x7777: utf8
 
 seq:
   - id: head

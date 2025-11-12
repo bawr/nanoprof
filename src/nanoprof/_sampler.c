@@ -45,7 +45,7 @@ void write_string(PyObject *pstr)
     Py_ssize_t size = 0;
     const char *text = PyUnicode_AsUTF8AndSize(pstr, &size);
     write_typed(uint16_t, 0x7777);
-    write_typed(uint64_t, text);
+    write_typed(uint64_t, pstr);
     write_typed(uint16_t, size);
     write_buffer(text, size);
 }
@@ -53,7 +53,7 @@ void write_string(PyObject *pstr)
 void write_string_maybe(PyObject *pstr)
 {
     int text_new = 0;
-    khint_t text_pos = pmap_put(written_text, pstr, &text_new);
+    khint_t text_pos = pmap_put(written_text, (uint64_t) pstr, &text_new);
     if (text_new) {
         kh_val(written_text, text_pos) = kh_size(written_text);
         write_string(pstr);
@@ -76,7 +76,7 @@ void write_node(NodeID node_id)
 {
     FrameNode node = FRAMES[node_id];
     int code_new = 0;
-    khint_t code_pos = pmap_put(written_code, node.code_object, &code_new);
+    khint_t code_pos = pmap_put(written_code, (uint64_t) node.code_object, &code_new);
     if (code_new) {
         kh_val(written_code, code_pos) = node_id;
         write_code(node.code_object);
@@ -87,7 +87,7 @@ void write_node(NodeID node_id)
     write_typed(NodeID, node.node_caller);
 }
 
-void write_emit(NTicks time)
+void write_mark(NTicks time)
 {
     write_typed(uint16_t, 0x1010);
     write_typed(uint64_t, time - profile_start);
@@ -429,7 +429,6 @@ static void emit_thread(SamplerThreadState *sts) {
 }
 
 static void emit_samples(PyThreadState *pts, NTicks time_now) {
-    write_emit(time_now);
     // TODO: compact the tree?
     for (unsigned int i = 1; i < NEXT_FREE_NODE; i++) {
         if (LAST_SEEN_NODE < i) {
@@ -454,6 +453,7 @@ static void emit_samples(PyThreadState *pts, NTicks time_now) {
         COUNTERS[6] += t1 - t0;
     }
 
+    write_mark(time_now);
     flush_buffer();
 
 //  PyThread_release_lock((runtime)->interpreters.mutex);
