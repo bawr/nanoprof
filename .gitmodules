@@ -1,0 +1,3 @@
+[submodule "src/khashl"]
+	path = src/khashl
+	url = https://github.com/attractivechaos/khashl.git

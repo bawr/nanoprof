@@ -13,6 +13,8 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "../khashl/khashl.h"
+
 #include <Python.h>
 #include <opcode.h>
 
@@ -189,6 +191,15 @@ typedef struct EvalState {
     int gc_enabled;
     unsigned long switch_interval;
 } EvalState;
+
+#pragma endregion
+
+#pragma region khash
+static inline khint_t kh_hash_ptr(void *ptr) { return kh_hash_uint64((uint64_t) ptr); }
+KHASHL_MAP_INIT(KH_LOCAL, pmap_t, pmap, void*, uint64_t, kh_hash_ptr, kh_eq_generic)
+
+pmap_t* written_code = NULL;
+pmap_t* written_text = NULL;
 
 #pragma endregion
 

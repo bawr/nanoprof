@@ -44,23 +44,43 @@ void write_string(PyObject *pstr)
 {
     Py_ssize_t size = 0;
     const char *text = PyUnicode_AsUTF8AndSize(pstr, &size);
+    write_typed(uint16_t, 0x7777);
     write_typed(uint64_t, text);
     write_typed(uint16_t, size);
     write_buffer(text, size);
 }
 
+void write_string_maybe(PyObject *pstr)
+{
+    int text_new = 0;
+    khint_t text_pos = pmap_put(written_text, pstr, &text_new);
+    if (text_new) {
+        kh_val(written_text, text_pos) = kh_size(written_text);
+        write_string(pstr);
+    }
+}
+
+
 void write_code(PyCode code)
 {
+    write_string_maybe(code->co_filename);
+    write_string_maybe(code->co_qualname);
     write_typed(uint16_t, 0xDEC0);
     write_typed(uint64_t, code);
-    write_string(code->co_filename);
-    write_string(code->co_qualname);
+    write_typed(uint64_t, code->co_filename);
+    write_typed(uint64_t, code->co_qualname);
     write_typed(uint16_t, code->co_firstlineno);
 }
 
 void write_node(NodeID node_id)
 {
     FrameNode node = FRAMES[node_id];
+    int code_new = 0;
+    khint_t code_pos = pmap_put(written_code, node.code_object, &code_new);
+    if (code_new) {
+        kh_val(written_code, code_pos) = node_id;
+        write_code(node.code_object);
+    }
     write_typed(uint16_t, 0xDED0);
     write_typed(uint64_t, node.code_object);
     write_typed(NodeID, node_id);
@@ -147,8 +167,8 @@ static inline void stack_drop(SamplerThreadState *state)
         return;
     }
     PyCode code = state->stack[--state->stack_depth].code;
-    Py_DECREF(code);
     state->stack[state->stack_depth] = (FrameCopy) {};
+    Py_DECREF(code);
 }
 
 SamplerThreadState *SamplerThreadState_alloc(PyThreadState *tstate, PyFrame frame, NTicks ticks)
@@ -261,9 +281,6 @@ void SamplerThreadState_times(SamplerThreadState *sts)
 }
 #endif
 
-PyObject *sampler_code_pending = NULL;
-PyObject *sampler_code_written = NULL;
-
 FrameTime FrameNode_total_time(NodeID node_id) {
     FrameTime total = {};
     for (SamplerThreadState *tts = STATE_HEAD; tts; tts = tts->snext) {
@@ -374,7 +391,6 @@ static NodeID force_node_for_coro(SamplerThreadState *sts)
     for (unsigned int i = 0; i < sts->stack_depth; i++) {
         frame = &sts->stack[i];
         node = frame->node = FrameNode_upsert(node, frame->code);
-//      PySet_Add(sampler_code_pending, (PyObject*) frame->code);
     }
     return node;
 }
@@ -390,7 +406,6 @@ static void collect_sample(SamplerThreadState *sts, NTicks time_now, int is_acti
                 node = frame->node;
             } else {
                 node = frame->node = FrameNode_upsert(node, frame->code);
-                PySet_Add(sampler_code_pending, (PyObject*) frame->code);  // TODO: are refs correct?
             }
         } else {
             break;
@@ -415,18 +430,7 @@ static void emit_thread(SamplerThreadState *sts) {
 
 static void emit_samples(PyThreadState *pts, NTicks time_now) {
     write_emit(time_now);
-    // TODO: compact the tree.
-    PyObject *updated_code_pending = PyNumber_InPlaceSubtract(sampler_code_pending, sampler_code_written);
-    Py_DECREF(sampler_code_pending);
-    PyObject *code = NULL;
-    while ((code = PySet_Pop(updated_code_pending))) {
-        write_code((PyCode) code);
-        PySet_Add(sampler_code_written, code);
-    }
-    PyErr_Clear();
-    sampler_code_pending = updated_code_pending;
-
-    // TODO: just keep an index of last written node?
+    // TODO: compact the tree?
     for (unsigned int i = 1; i < NEXT_FREE_NODE; i++) {
         if (LAST_SEEN_NODE < i) {
             LAST_SEEN_NODE = i;
@@ -728,14 +732,12 @@ void sampler_atfork(void) {
 }
 
 PyMODINIT_FUNC PyInit__sampler(void) {
-    sampler_code_pending = PySet_New(NULL);
-    sampler_code_written = PySet_New(NULL);
     sentinel = PyUnicode_InternFromString("qndp");
     PyThread_tss_create(&STATE_KEY);
     PyThread_tss_create(&THREAD_KEY);
     tick_init();
     profile_buffer = PyMem_RawMalloc(profile_buffer_limit);
-    profile_fileno = open("./profile.qnd", O_WRONLY | O_CREAT | O_CLOEXEC | O_TRUNC, 00600);
+    profile_fileno = open("/tmp/profile.qnd", O_WRONLY | O_CREAT | O_CLOEXEC | O_TRUNC, 00600);
     write_typed(uint32_t, 0x70646E71);
     write_typed(uint64_t, tick_to_ns_mul);
     write_typed(uint64_t, tick_to_ns_div);
@@ -752,6 +754,11 @@ PyMODINIT_FUNC PyInit__sampler(void) {
     }
 
 //  PyTypeObject* asyncio_future_type = (PyTypeObject*) PyObject_GetAttrString(PyImport_ImportModule("_asyncio"), "Future");
+
+    written_code = pmap_init();
+    written_text = pmap_init();
+    pmap_resize(written_code, 0xFFFF);
+    pmap_resize(written_text, 0xFFFF);
 
 	return PyModule_Create(&sampler_module);
 }
