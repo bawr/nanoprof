@@ -153,11 +153,14 @@ static inline void stack_push(SamplerThreadState *state, PyFrame frame, uint64_t
         return;
     }
     Py_INCREF(code);
-    state->stack[state->stack_depth++] = (FrameCopy) {
+    uint64_t *stack_depth = &state->stack_depth;
+    state->stack[*stack_depth] = (FrameCopy) {
         .code = code,
         .node = 0,
         .time = tick,
     };
+    asm volatile("nop" ::: "memory");
+    __atomic_fetch_add(stack_depth, 1, __ATOMIC_SEQ_CST);
 }
 
 static inline void stack_drop(SamplerThreadState *state)
@@ -166,8 +169,10 @@ static inline void stack_drop(SamplerThreadState *state)
     if (__builtin_expect(state == &STATE_ERROR, 0)) {
         return;
     }
-    PyCode code = state->stack[--state->stack_depth].code;
-    state->stack[state->stack_depth] = (FrameCopy) {};
+    uint64_t stack_depth = __atomic_sub_fetch(&state->stack_depth, 1, __ATOMIC_SEQ_CST);
+    asm volatile("nop" ::: "memory");
+    PyCode code = state->stack[stack_depth].code;
+    state->stack[stack_depth] = (FrameCopy) {};
     Py_DECREF(code);
 }
 
@@ -327,6 +332,7 @@ NodeID FrameNode_upsert(NodeID node_caller, PyCode code_callee)
     FrameNode *node = &FRAMES[node_caller];
     NodeID next = NEXT_FREE_NODE;
     NodeID prev = 0;
+    Py_INCREF(code_callee);
     if (node->head_callee) {
         node = &FRAMES[node->head_callee];
         while ((node->code_object != code_callee) && (node->next_callee)) {
@@ -583,25 +589,46 @@ PyObject *sampler_evalex(PyThreadState *tstate, PyFrame frame, int throwflag)
 destructor orig_code_dealloc = NULL;
 PyCFunction orig_set_result = NULL;
 
+int hack_code_dealloc_info = 0;
+int hack_code_dealloc_show = 0;
+int hack_code_dealloc_trap = 0;
+
 void hack_code_dealloc(PyObject *code_raw)
 {
+    PyCode code = (PyCode) code_raw;
     if (_Py_IsFinalizing()) {
-        orig_code_dealloc(code_raw);
-        return;
+        goto _ret;
     }
-    PyCodeObject *code = (PyCodeObject*) code_raw;
-    Py_ssize_t name_rc = code->co_name ? code->co_name->ob_refcnt : 0;
-    Py_ssize_t file_rc = code->co_filename ? code->co_filename->ob_refcnt : 0;
-    const Py_ssize_t weird_rc = 1e9;
-    printf(
-        "BOOM : %p : %p %3zd : %p %3zd : %d\n",
-        code,
-        code->co_filename,
-        file_rc,
-        code->co_name,
-        name_rc < weird_rc ? name_rc : name_rc - weird_rc,
-        name_rc > weird_rc
-    );
+    if (hack_code_dealloc_info) {
+        PyThreadState *ts = PyThreadState_Get();
+        char buf[1024] = {};
+        int size = snprintf(
+            buf,
+            sizeof(buf),
+            "DROP: %p @ %lu\n",
+            code, ts->native_thread_id
+        );
+        buf[size] = '\n';
+        write(1, buf, size);
+    }
+    if (hack_code_dealloc_show) {
+        Py_ssize_t path_len; const char *path_str = PyUnicode_AsUTF8AndSize(code->co_filename, &path_len);
+        Py_ssize_t name_len; const char *name_str = PyUnicode_AsUTF8AndSize(code->co_filename, &name_len);
+        char buf[1024] = {};
+        int size = snprintf(
+            buf,
+            sizeof(buf),
+            "NAME[%p]: %s\nPATH[%p]: %s\n",
+            code, name_str,
+            code, path_str
+        );
+        buf[size] = '\n';
+        write(1, buf, size);
+    }
+    if (hack_code_dealloc_trap) {
+        __builtin_trap();
+    }
+    _ret:
     orig_code_dealloc(code_raw);
 }
 
