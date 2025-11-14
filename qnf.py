@@ -17,6 +17,7 @@ THREAD_ID_TO_THREAD = {}
 
 LAST_TIME = 0
 LAST_TIME_PER_THREAD = {}
+LAST_LOAD_PER_THREAD = {}
 
 STRING_ARRAY = [
     "$",
@@ -130,7 +131,7 @@ PROFILE_CORE = {
                 ]
             }
         ],
-        "preprocessedProfileVersion": 58,
+        "preprocessedProfileVersion": -58,
         "symbolicated": True,
         "markerSchema": []
     },
@@ -139,6 +140,9 @@ PROFILE_CORE = {
     "shared": {
         "stringArray": STRING_ARRAY,
         "sources": SOURCES_TABLE,
+        "frameTable": FRAME_TABLE,
+        "funcTable": FUNC_TABLE,
+        "stackTable": STACK_TABLE,
     },
     "threads": [],
 }
@@ -218,4 +222,11 @@ if __name__ == "__main__":
                 "weight": timer * 1000,
             })
             LAST_TIME_PER_THREAD[rec.thread_id] += timer
-    print(json.dumps(PROFILE_CORE, indent=4))
+    for thread in PROFILE_CORE["threads"]:
+        thread["funcTable"] = None
+        thread["frameTable"] = None
+        thread["stackTable"] = None
+    PROFILE_CORE["shared"]["funcTable"] = FUNC_TABLE
+    PROFILE_CORE["shared"]["frameTable"] = FRAME_TABLE
+    PROFILE_CORE["shared"]["stackTable"] = STACK_TABLE
+    print(json.dumps(PROFILE_CORE))

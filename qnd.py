@@ -42,26 +42,9 @@ class Qnd(KaitaiStruct):
 
         def _read(self):
             self.ptr = self._io.read_u8le()
-            self.filename = Qnd.Utf8(self._io, self, self._root)
-            self.qualname = Qnd.Utf8(self._io, self, self._root)
+            self.ptr_filename = self._io.read_u8le()
+            self.ptr_qualname = self._io.read_u8le()
             self.line = self._io.read_u2le()
-
-
-        def _fetch_instances(self):
-            pass
-            self.filename._fetch_instances()
-            self.qualname._fetch_instances()
-
-
-    class Emit(KaitaiStruct):
-        def __init__(self, _io, _parent=None, _root=None):
-            super(Qnd.Emit, self).__init__(_io)
-            self._parent = _parent
-            self._root = _root
-            self._read()
-
-        def _read(self):
-            self.time = self._io.read_u8le()
 
 
         def _fetch_instances(self):
@@ -81,6 +64,21 @@ class Qnd(KaitaiStruct):
                 raise kaitaistruct.ValidationNotEqualError(1885630065, self.tag, self._io, u"/types/head/seq/0")
             self.tick_mul = self._io.read_u8le()
             self.tick_div = self._io.read_u8le()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class Mark(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Qnd.Mark, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._read()
+
+        def _read(self):
+            self.time = self._io.read_u8le()
 
 
         def _fetch_instances(self):
@@ -132,9 +130,12 @@ class Qnd(KaitaiStruct):
         def _read(self):
             self.tag = self._io.read_u2le()
             _on = self.tag
-            if _on == 4112:
+            if _on == 30583:
                 pass
-                self.rec = Qnd.Emit(self._io, self, self._root)
+                self.rec = Qnd.Utf8(self._io, self, self._root)
+            elif _on == 4112:
+                pass
+                self.rec = Qnd.Mark(self._io, self, self._root)
             elif _on == 57024:
                 pass
                 self.rec = Qnd.Code(self._io, self, self._root)
@@ -152,7 +153,10 @@ class Qnd(KaitaiStruct):
         def _fetch_instances(self):
             pass
             _on = self.tag
-            if _on == 4112:
+            if _on == 30583:
+                pass
+                self.rec._fetch_instances()
+            elif _on == 4112:
                 pass
                 self.rec._fetch_instances()
             elif _on == 57024:
