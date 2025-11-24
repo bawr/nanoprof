@@ -41,6 +41,7 @@ clock_gettime_nsec_np(clockid_t clock_id)
 #ifdef __x86_64__
 
 #include <x86intrin.h>
+#include <immintrin.h>
 
 static uint64_t
 tick_read(void)
@@ -79,6 +80,12 @@ tick_init(void)
     tick_to_ns_div /= t_gcd;
 }
 
+static void
+spin_wait()
+{
+    asm volatile("pause" ::: "memory");
+}
+
 #elif __ARM_ARCH_ISA_A64
 
 #include <arm_acle.h>
@@ -106,6 +113,12 @@ tick_init(void)
 
     tick_to_ns_mul /= t_gcd;
     tick_to_ns_div /= t_gcd;
+}
+
+static void
+spin_wait()
+{
+    asm volatile("yield" ::: "memory");
 }
 
 #elif 0

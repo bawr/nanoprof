@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <limits.h>
 #include <pthread.h>
+#include <sched.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -164,8 +165,12 @@ typedef struct SamplerThreadState {
     uint64_t time_sys;
     SamplerThreadState *sprev;
     SamplerThreadState *snext;
+    uint64_t lock;
     FrameCopy stack[STACKS_MAX];
 } SamplerThreadState;
+
+void SamplerThreadState_lock(SamplerThreadState* state);
+void SamplerThreadState_unlock(SamplerThreadState* state);
 
 FrameNode FRAMES[FRAMES_MAX];
 FrameTime TIMERS[TIMERS_MAX];
@@ -183,6 +188,8 @@ PyCode async_frame_separator = (void*)-1;
 SamplerThreadState* STATE_HEAD = NULL;
 SamplerThreadState* STATE_TAIL = NULL;
 SamplerThreadState STATE_ERROR = {};
+
+SamplerThreadState* LAST_THREAD_STATE = NULL;
 
 typedef struct EvalState {
     PyObject *exc_type;

@@ -147,6 +147,7 @@ static inline void stack_fill(SamplerThreadState *state, PyFrame frame, uint64_t
 
 static inline void stack_push(SamplerThreadState *state, PyFrame frame, uint64_t tick)
 {
+    SamplerThreadState_lock(state);
     // TODO: depth exceeded / code NULL
     PyCode code = _PyFrame_GetCode(frame);
     if (__builtin_expect(state == &STATE_ERROR, 0)) {
@@ -161,10 +162,12 @@ static inline void stack_push(SamplerThreadState *state, PyFrame frame, uint64_t
     };
     asm volatile("nop" ::: "memory");
     __atomic_fetch_add(stack_depth, 1, __ATOMIC_SEQ_CST);
+    SamplerThreadState_unlock(state);
 }
 
 static inline void stack_drop(SamplerThreadState *state)
 {
+    SamplerThreadState_lock(state);
     // TODO: depth exceeded
     if (__builtin_expect(state == &STATE_ERROR, 0)) {
         return;
@@ -174,6 +177,7 @@ static inline void stack_drop(SamplerThreadState *state)
     PyCode code = state->stack[stack_depth].code;
     state->stack[stack_depth] = (FrameCopy) {};
     Py_DECREF(code);
+    SamplerThreadState_unlock(state);
 }
 
 SamplerThreadState *SamplerThreadState_alloc(PyThreadState *tstate, PyFrame frame, NTicks ticks)
@@ -215,6 +219,7 @@ SamplerThreadState *SamplerThreadState_alloc(PyThreadState *tstate, PyFrame fram
     state->native_thread_id = tstate->native_thread_id;
     state->stack_depth = 0;
     state->sprev = state->sprev;
+    state->lock = 0;
 
     uint64_t depth = stack_depth(frame);
     state->stack_depth = depth;
@@ -263,6 +268,20 @@ SamplerThreadState *SamplerThreadState_free(SamplerThreadState* state)
     }
     PyMem_Free(state);
     return NULL;
+}
+
+void SamplerThreadState_lock(SamplerThreadState* state)
+{
+    // TODO: __ATOMIC_HLE_ACQUIRE
+    while (__atomic_test_and_set(&state->lock, __ATOMIC_ACQUIRE)) {
+        spin_wait();
+    }
+}
+
+void SamplerThreadState_unlock(SamplerThreadState* state)
+{
+    // TODO: __ATOMIC_HLE_RELEASE
+    __atomic_clear(&state->lock, __ATOMIC_RELEASE);
 }
 
 #ifdef __APPLE__
@@ -394,7 +413,8 @@ static NodeID force_node_for_coro(SamplerThreadState *sts)
 {
     NodeID node = 0;
     FrameCopy *frame;
-    for (unsigned int i = 0; i < sts->stack_depth; i++) {
+    unsigned int i = 0;
+    for (unsigned int i = 0; i < __atomic_load_n(&sts->stack_depth, __ATOMIC_SEQ_CST); i++) {
         frame = &sts->stack[i];
         node = frame->node = FrameNode_upsert(node, frame->code);
     }
@@ -470,9 +490,18 @@ static inline void periodic(PyThreadState *pts, SamplerThreadState *sts, uint64_
     // if just once... is the current place more, or less correct?
     NTicks t0 = tick_time();
 
+    if (sts == NULL) {
+        sts = LAST_THREAD_STATE;
+    }
+    if (sts == NULL) {
+        return;
+    }
+
     if (__builtin_expect(should_sample(ticks) > 0, 0)) {
         for (SamplerThreadState *tts = STATE_HEAD; tts; tts = tts->snext) {
+            SamplerThreadState_lock(tts);
             collect_sample(tts, ticks, sts == tts);
+            SamplerThreadState_unlock(tts);
         }
         profile_tprev = ticks;
     }
@@ -507,6 +536,20 @@ static inline void periodic(PyThreadState *pts, SamplerThreadState *sts, uint64_
     }
     NTicks t1 = tick_time();
     COUNTERS[0] += t1 - t0;
+}
+
+static void* periodic_thread(void *arg) {
+    PyThreadState *tstate = PyThreadState_Get();
+    while (profile_start) {
+        uint64_t ticks = tick_time();
+        periodic(tstate, NULL, ticks);
+        struct timespec ts = {
+            .tv_sec = 0,
+            .tv_nsec = sample_period_ns / 10,
+        };
+        nanosleep(&ts, NULL);
+    }
+    return NULL;
 }
 
 #pragma endregion
@@ -548,6 +591,7 @@ PyObject *sampler_evalex(PyThreadState *tstate, PyFrame frame, int throwflag)
     SamplerThreadState *sts = PyThread_tss_get(&THREAD_KEY);
     if (__builtin_expect(sts == NULL, 0)) {
         sts = SamplerThreadState_alloc(tstate, fprev, ticks0);
+        LAST_THREAD_STATE = sts;
     }
     uint64_t ticks1 = tick_time();
     // periodic(tstate, sts, ticks1);
@@ -574,7 +618,7 @@ PyObject *sampler_evalex(PyThreadState *tstate, PyFrame frame, int throwflag)
 */
 
     uint64_t ticks3 = tick_time();
-    periodic(tstate, sts, ticks3);
+//  periodic(tstate, sts, ticks3);
     stack_drop(sts);
     uint64_t ticks4 = tick_time();
 
@@ -692,6 +736,14 @@ PyObject *sampler_enable(PyObject * Py_UNUSED(module), PyObject *args)
     profile_tprev = profile_start;
     profile_eprev = profile_start;
 	PyObject *r = PyLong_FromUnsignedLongLong(profile_start);
+
+    pthread_t thread;
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    pthread_create(&thread, &attr, periodic_thread, NULL);
+    pthread_attr_destroy(&attr);
+
 	return r;
 }
 

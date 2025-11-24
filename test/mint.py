@@ -35,11 +35,13 @@ def main():
             t.join()
 
 if __name__ == "__main__":
-    q = nanoprof._sampler.inject(None)
-    q = nanoprof._sampler.enable(
-        False,
-        1e-3,
-        1e-4,
-    )
-    main()
-    r = nanoprof._sampler.finish()
+    try:
+        q = nanoprof._sampler.inject(None)
+        q = nanoprof._sampler.enable(
+            False,
+            1e-3,
+            1e-4,
+        )
+        main()
+    finally:
+        r = nanoprof._sampler.finish()

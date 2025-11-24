@@ -18,6 +18,7 @@ THREAD_ID_TO_THREAD = {}
 LAST_TIME = 0
 LAST_TIME_PER_THREAD = {}
 LAST_LOAD_PER_THREAD = {}
+PREV_LOAD_PER_THREAD = {}
 
 STRING_ARRAY = [
     "$",
@@ -57,7 +58,7 @@ STACK_TABLE = {
 SAMPLE_CORE = {
     "stack": [0],
     "time": [0],
-#   "threadCPUDelta": [0],
+    "threadCPUDelta": [0],
     "weight": [0],
     "weightType": "tracing-ms",
     "length": 1
@@ -202,23 +203,28 @@ if __name__ == "__main__":
             if (rec.thread_id not in THREAD_ID_TO_THREAD):
                 thread = THREAD_ID_TO_THREAD[rec.thread_id] = THREAD_CORE.copy()
                 PROFILE_CORE["threads"].append(thread)
+                thread["name"] = "Thread[%d]" % rec.thread_id
                 thread["isMainThread"] = len(THREAD_ID_TO_THREAD) == 1
                 thread["pid"] = 666
                 thread["tid"] = rec.thread_id
                 thread["samples"] = copy.deepcopy(SAMPLE_CORE)
+                LAST_LOAD_PER_THREAD[rec.thread_id] = 0
             else:
                 ...
             LAST_TIME_PER_THREAD[rec.thread_id] = LAST_TIME
+            PREV_LOAD_PER_THREAD[rec.thread_id] = LAST_LOAD_PER_THREAD[rec.thread_id]
+            LAST_LOAD_PER_THREAD[rec.thread_id] = rec.time_user + rec.time_sys
         if isinstance(rec, qnd.Qnd.Mark):
             LAST_TIME = rec.time / 1e9
         if isinstance(rec, qnd.Qnd.Time):
             thread = THREAD_ID_TO_THREAD[rec.thread_id]
             stack_id = rec.node_id
             timer = (rec.time_active + rec.time_paused + rec.time_waited) / 1e9
+            thread_load = LAST_LOAD_PER_THREAD[rec.thread_id] - PREV_LOAD_PER_THREAD[rec.thread_id]
             table_insert(thread["samples"], {
                 "stack": stack_id,
                 "time": LAST_TIME_PER_THREAD[rec.thread_id] * 1000,
-#               "threadCPUDelta": ...,
+                "threadCPUDelta": thread_load,
                 "weight": timer * 1000,
             })
             LAST_TIME_PER_THREAD[rec.thread_id] += timer
